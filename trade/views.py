@@ -1,4 +1,5 @@
 from datetime import timedelta
+import requests
 
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
@@ -9,7 +10,8 @@ from django.utils import timezone
 from .models import Expense, SaleInvoice, SaleItem, Variant
 
 LOW_STOCK = 5  # أي صنف كميته أقل من أو تساوي الرقم ده يظهر في التنبيهات
-DEC = DecimalField(max_digits=14, decimal_places=2)import requests
+DEC = DecimalField(max_digits=14, decimal_places=2)
+
 
 def send_telegram_notification(message):
     BOT_TOKEN = "8881158933:AAGJLD3xwtcQuW62agk67GAg7Sul5IAZdJs"
