@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>فاتورة بيع #{{ invoice.pk }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Cairo', Tahoma, sans-serif; margin: 0; background: #f2f2f2; color: #111; }
+    .sheet { width: 148mm; min-height: 200mm; margin: 16px auto; background: #fff; padding: 12mm; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+    .head { text-align: center; border-bottom: 2px solid #1f3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+    .head h1 { margin: 0; font-size: 24px; color: #1f3a5f; }
+    .meta { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: #1f3a5f; color: #fff; padding: 6px; text-align: right; }
+    td { padding: 6px; border-bottom: 1px solid #ddd; }
+    .num { text-align: left; white-space: nowrap; }
+    .sum { margin-top: 12px; margin-right: auto; width: 60%; font-size: 15px; }
+    .sum div { display: flex; justify-content: space-between; padding: 3px 0; }
+    .sum .grand { font-size: 20px; font-weight: 700; border-top: 2px solid #1f3a5f; margin-top: 4px; padding-top: 6px; }
+    .foot { text-align: center; margin-top: 24px; font-size: 13px; color: #555; }
+    .actions { text-align: center; margin: 16px; }
+    .actions a, .actions button { font-family: inherit; font-size: 15px; padding: 8px 18px; border-radius: 6px;
+      border: 0; cursor: pointer; text-decoration: none; margin: 0 4px; }
+    .btn-print { background: #1b7f5c; color: #fff; }
+    .btn-back { background: #1f3a5f; color: #fff; }
+    @media screen and (max-width: 640px) {
+      .sheet { width: auto; min-height: 0; margin: 8px; padding: 14px; }
+      table { font-size: 13px; }
+      .actions a, .actions button { display: inline-block; margin: 4px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .sheet { box-shadow: none; margin: 0; width: 100%; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button class="btn-print" onclick="window.print()">طباعة</button>
+    <a class="btn-back" href="{% url 'pos' %}">بيع جديد</a>
+    <a class="btn-back" href="{% url 'dashboard' %}">لوحة التحكم</a>
+  </div>
+
+  <div class="sheet">
+    <div class="head">
+      <h1>{{ shop_name }}</h1>
+      <div>فاتورة بيع</div>
+    </div>
+    <div class="meta">
+      <div>رقم الفاتورة: <b>#{{ invoice.pk }}</b></div>
+      <div>التاريخ: <b>{{ invoice.date|date:"d/m/Y" }}</b></div>
+    </div>
+    {% if invoice.customer %}
+    <div class="meta"><div>العميل: <b>{{ invoice.customer.name }}</b></div></div>
+    {% endif %}
+
+    <table>
+      <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td>{{ r.qty }}</td>
+          <td class="num">{{ r.price|floatformat:2 }}</td>
+          <td class="num">{{ r.total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="sum">
+      <div><span>المجموع</span><span>{{ gross|floatformat:2 }}</span></div>
+      {% if invoice.discount %}
+      <div><span>الخصم</span><span>- {{ invoice.discount|floatformat:2 }}</span></div>
+      {% endif %}
+      <div class="grand"><span>الإجمالي</span><span>{{ total|floatformat:2 }}</span></div>
+    </div>
+
+    <div class="foot">شكراً لتعاملكم معنا</div>
+  </div>
+</body>
+</html>

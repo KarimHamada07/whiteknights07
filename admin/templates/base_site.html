@@ -1,0 +1,48 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | إدارة المحل{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">اسم محلك هنا</a></div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* غيّر الألوان من هنا */
+  :root {
+    --primary: #1f3a5f;
+    --secondary: #2c5282;
+    --accent: #e0a526;
+    --header-bg: #1f3a5f;
+    --header-color: #ffffff;
+    --header-branding-color: #f5c242;
+    --header-link-color: #ffffff;
+    --breadcrumbs-bg: #2c5282;
+    --button-bg: #1f3a5f;
+    --button-hover-bg: #2c5282;
+    --default-button-bg: #e0a526;
+    --default-button-hover-bg: #c98f12;
+    --object-tools-bg: #1f3a5f;
+    --object-tools-hover-bg: #2c5282;
+  }
+  html, body, input, select, textarea, button, table, th, td, .module h2, .module caption {
+    font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important;
+  }
+  body { font-size: 15px; }
+  #site-name a { font-weight: 700; font-size: 26px; letter-spacing: 0; }
+  .module { border-radius: 8px; overflow: hidden; }
+  .module h2, .module caption { font-weight: 600; font-size: 15px; }
+  .button, input[type=submit], input[type=button], .submit-row input, a.button {
+    border-radius: 6px; font-weight: 600;
+  }
+  #changelist table thead th { font-weight: 600; }
+</style>
+{% endblock %}

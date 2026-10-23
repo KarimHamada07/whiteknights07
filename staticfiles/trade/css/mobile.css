@@ -1,0 +1,34 @@
+/* تحسينات الموبايل للقائمة الجانبية */
+#sidebar-close { display: none; }
+
+@media (max-width: 991.98px) {
+  /* القائمة تاخد 80% من العرض بحد أقصى 300px بدل الشاشة كلها */
+  .main-sidebar {
+    width: 80vw !important;
+    max-width: 300px;
+  }
+
+  /* زر إغلاق واضح أعلى القائمة */
+  #sidebar-close {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: 0;
+    background: #c53030;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  /* زر القائمة ☰ أكبر وأسهل في اللمس */
+  .navbar-nav [data-widget="pushmenu"] {
+    font-size: 26px;
+    padding: 8px 16px;
+  }
+
+  /* عناصر القائمة أكبر للمس */
+  .main-sidebar .nav-link {
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,240 @@
+{% extends "admin/base.html" %}
+
+{% block content_title %}بيع سريع{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  #products { max-height: 62vh; overflow-y: auto; }
+  #products .list-group-item { cursor: pointer; }
+  #cart input.form-control { padding: 2px 6px; height: 32px; }
+  .total-box { font-size: 30px; font-weight: 700; color: #1b7f5c; }
+  #mobilebar { display: none; }
+
+  @media (max-width: 991px) {
+    #products { max-height: 45vh; }
+    #products .list-group-item { padding: 14px 12px; font-size: 16px; }
+    #cart input.form-control { height: 40px; font-size: 16px; }
+    #search, #customer, #discount { font-size: 16px; height: 44px; }
+    .total-box { font-size: 24px; }
+    #checkout { width: 100%; margin-top: 10px; }
+    #clear { display: none; }
+    .card-footer .d-flex { flex-direction: column; align-items: stretch !important; }
+    /* شريط ثابت أسفل الشاشة بالإجمالي وزر الذهاب للفاتورة */
+    #mobilebar {
+      display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1030;
+      background: #1f3a5f; color: #fff; padding: 10px 14px;
+      justify-content: space-between; align-items: center;
+      box-shadow: 0 -2px 10px rgba(0,0,0,.25);
+    }
+    #mobilebar b { font-size: 20px; }
+    #mobilebar button { border: 0; border-radius: 8px; padding: 8px 16px;
+      background: #e0a526; color: #1b1b1b; font-weight: 700; }
+    .content-wrapper { padding-bottom: 80px; }
+  }
+</style>
+
+<div class="row">
+  <!-- الأصناف -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <input id="search" type="search" class="form-control"
+               placeholder="ابحث باسم الموديل أو الكود أو المقاس أو اللون..." autofocus>
+      </div>
+      <div class="card-body p-0">
+        <div id="products" class="list-group list-group-flush"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- السلة -->
+  <div class="col-lg-6">
+    <div class="card" id="cart-card">
+      <div class="card-header"><h3 class="card-title">الفاتورة الحالية</h3></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-sm mb-0" id="cart">
+          <thead><tr><th>الصنف</th><th style="min-width:80px">الكمية</th>
+            <th style="min-width:100px">السعر</th><th style="min-width:80px">الإجمالي</th><th></th></tr></thead>
+          <tbody id="cart-body"></tbody>
+        </table>
+        </div>
+        <div id="empty" class="text-muted p-3">اضغط على صنف لإضافته للفاتورة</div>
+      </div>
+      <div class="card-footer">
+        <div class="row">
+          <div class="col-md-6 mb-2">
+            <label class="mb-1">العميل (اختياري)</label>
+            <select id="customer" class="form-control">
+              <option value="">— بدون عميل —</option>
+              {% for c in customers %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 mb-2">
+            <label class="mb-1">خصم</label>
+            <input id="discount" type="number" min="0" step="0.01" value="0" class="form-control">
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <div>الإجمالي: <span id="total" class="total-box">0.00</span></div>
+          <div>
+            <button id="clear" type="button" class="btn btn-outline-secondary">تفريغ</button>
+            <button id="checkout" type="button" class="btn btn-success btn-lg" disabled>إتمام البيع</button>
+          </div>
+        </div>
+        <div id="msg" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="mobilebar">
+  <div>الإجمالي: <b id="mobile-total">0.00</b></div>
+  <button type="button" id="goto-cart">الفاتورة (<span id="mobile-count">0</span>)</button>
+</div>
+
+{{ variants|json_script:"variants" }}
+<script>
+(function () {
+  var V = JSON.parse(document.getElementById("variants").textContent);
+  var cart = {};
+  var csrf = "{{ csrf_token }}";
+  var checkoutUrl = "{% url 'pos_checkout' %}";
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c];
+    });
+  }
+  function label(v) { return v.name + " — " + v.size + (v.color ? " — " + v.color : ""); }
+  function money(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+
+  var elProducts = document.getElementById("products");
+  var elBody = document.getElementById("cart-body");
+  var elEmpty = document.getElementById("empty");
+  var elTotal = document.getElementById("total");
+  var elDiscount = document.getElementById("discount");
+  var elCheckout = document.getElementById("checkout");
+  var elMsg = document.getElementById("msg");
+
+  function renderProducts() {
+    var f = document.getElementById("search").value.trim().toLowerCase();
+    var html = "";
+    V.forEach(function (v) {
+      if (f && (label(v) + " " + v.code).toLowerCase().indexOf(f) === -1) return;
+      html += '<a class="list-group-item list-group-item-action d-flex justify-content-between" data-id="' + v.id + '">' +
+        "<span>" + esc(label(v)) + ' <small class="text-muted">' + esc(v.code) + "</small></span>" +
+        '<span><span class="badge badge-info">' + v.qty + ' متاح</span> <b>' + money(v.price) + "</b></span></a>";
+    });
+    elProducts.innerHTML = html || '<div class="p-3 text-muted">لا توجد نتائج</div>';
+  }
+
+  function renderCart() {
+    var ids = Object.keys(cart);
+    var html = "";
+    ids.forEach(function (id) {
+      var c = cart[id];
+      html += '<tr data-id="' + id + '"><td>' + esc(c.label) + "</td>" +
+        '<td><input type="number" min="1" max="' + c.max + '" value="' + c.qty + '" class="form-control" data-f="qty"></td>' +
+        '<td><input type="number" min="0" step="0.01" value="' + c.price + '" class="form-control" data-f="price"></td>' +
+        '<td id="line-' + id + '">' + money(c.qty * c.price) + "</td>" +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger" data-del="' + id + '">×</button></td></tr>';
+    });
+    elBody.innerHTML = html;
+    elEmpty.style.display = ids.length ? "none" : "block";
+    updateTotals();
+  }
+
+  function updateTotals() {
+    var sum = 0;
+    Object.keys(cart).forEach(function (id) {
+      var c = cart[id];
+      sum += c.qty * c.price;
+      var cell = document.getElementById("line-" + id);
+      if (cell) cell.textContent = money(c.qty * c.price);
+    });
+    var d = parseFloat(elDiscount.value) || 0;
+    elTotal.textContent = money(sum - d);
+    elCheckout.disabled = Object.keys(cart).length === 0;
+    document.getElementById("mobile-total").textContent = money(sum - d);
+    document.getElementById("mobile-count").textContent = Object.keys(cart).length;
+  }
+
+  document.getElementById("goto-cart").addEventListener("click", function () {
+    document.getElementById("cart-card").scrollIntoView({behavior: "smooth", block: "start"});
+  });
+
+  function add(id) {
+    var v = V.find(function (x) { return x.id === id; });
+    if (!v) return;
+    var c = cart[id];
+    if (c) {
+      if (c.qty >= c.max) { alert("وصلت لأقصى كمية متاحة في المخزن"); return; }
+      c.qty += 1;
+    } else {
+      cart[id] = {id: id, label: label(v), qty: 1, price: v.price, max: v.qty};
+    }
+    renderCart();
+  }
+
+  elProducts.addEventListener("click", function (e) {
+    var row = e.target.closest("[data-id]");
+    if (row) add(parseInt(row.getAttribute("data-id"), 10));
+  });
+
+  elBody.addEventListener("input", function (e) {
+    var tr = e.target.closest("tr");
+    if (!tr) return;
+    var c = cart[tr.getAttribute("data-id")];
+    var f = e.target.getAttribute("data-f");
+    var val = parseFloat(e.target.value) || 0;
+    if (f === "qty") {
+      val = Math.max(1, Math.min(Math.floor(val), c.max));
+      c.qty = val;
+    } else {
+      c.price = Math.max(0, val);
+    }
+    updateTotals();
+  });
+
+  elBody.addEventListener("click", function (e) {
+    var id = e.target.getAttribute("data-del");
+    if (id) { delete cart[id]; renderCart(); }
+  });
+
+  elDiscount.addEventListener("input", updateTotals);
+  document.getElementById("search").addEventListener("input", renderProducts);
+  document.getElementById("clear").addEventListener("click", function () { cart = {}; renderCart(); });
+
+  elCheckout.addEventListener("click", function () {
+    elMsg.classList.add("d-none");
+    elCheckout.disabled = true;
+    var items = Object.keys(cart).map(function (id) {
+      return {id: cart[id].id, qty: cart[id].qty, price: cart[id].price};
+    });
+    fetch(checkoutUrl, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRFToken": csrf},
+      body: JSON.stringify({
+        items: items,
+        discount: parseFloat(elDiscount.value) || 0,
+        customer: document.getElementById("customer").value || null
+      })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) { window.location.href = d.print_url; return; }
+      elMsg.textContent = d.error || "حدث خطأ";
+      elMsg.classList.remove("d-none");
+      elCheckout.disabled = false;
+    }).catch(function () {
+      elMsg.textContent = "تعذر الاتصال بالسيرفر";
+      elMsg.classList.remove("d-none");
+      elCheckout.disabled = false;
+    });
+  });
+
+  renderProducts();
+  renderCart();
+})();
+</script>
+{% endblock %}
