@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Customer, SaleInvoice, SaleItem, Variant
+from .models import Customer, Payment, SaleInvoice, SaleItem, Variant
 
 
 @staff_member_required
@@ -49,15 +49,22 @@ def pos_checkout(request):
         discount = Decimal(str(payload.get("discount") or 0))
         if discount < 0:
             raise ValidationError("الخصم غير صحيح")
+        credit = bool(payload.get("credit"))
+        paid_now = Decimal(str(payload.get("paid") or 0))
+        if paid_now < 0:
+            raise ValidationError("المدفوع غير صحيح")
 
         with transaction.atomic():
             customer = None
             if payload.get("customer"):
                 customer = Customer.objects.filter(pk=payload["customer"]).first()
+            if credit and customer is None:
+                raise ValidationError("اختار العميل للبيع الآجل")
             invoice = SaleInvoice.objects.create(
                 customer=customer,
                 date=timezone.localdate(),
                 discount=discount,
+                payment_type="credit" if credit else "cash",
                 notes="بيع سريع",
             )
             gross = Decimal("0")
@@ -73,6 +80,11 @@ def pos_checkout(request):
             if discount > gross:
                 raise ValidationError("الخصم أكبر من إجمالي الفاتورة")
             invoice.confirm()  # يخصم المخزون ويثبت التكلفة
+            if credit and paid_now > 0:
+                if paid_now > gross - discount:
+                    raise ValidationError("المدفوع أكبر من إجمالي الفاتورة")
+                Payment.objects.create(customer=customer, invoice=invoice,
+                                       amount=paid_now, notes="مقدم")
 
     except ValidationError as e:
         return JsonResponse({"ok": False, "error": " ".join(e.messages)}, status=400)
@@ -103,5 +115,7 @@ def sale_print(request, pk):
         "rows": rows,
         "gross": gross,
         "total": gross - invoice.discount,
+        "paid": invoice.paid_total,
+        "remaining": invoice.remaining,
         "shop_name": "Ultras White Knights",
     })

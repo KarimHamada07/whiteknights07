@@ -1,33 +1,18 @@
 from datetime import timedelta
-import requests
 
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import DecimalField, F, Sum
+from django.db.models import Count, DecimalField, F, Sum
 from django.shortcuts import render
 from django.utils import timezone
 
-from .models import Expense, SaleInvoice, SaleItem, Variant
+from .models import (ClothingModel, Customer, Expense, OnlineOrder,
+                     PurchaseInvoice, SaleInvoice, SaleItem, Variant)
+from .custody_views import custody_summary
+from .stock_views import _size_key
 
 LOW_STOCK = 5  # أي صنف كميته أقل من أو تساوي الرقم ده يظهر في التنبيهات
 DEC = DecimalField(max_digits=14, decimal_places=2)
-
-
-def send_telegram_notification(message):
-    BOT_TOKEN = "8881158933:AAGJLD3xwtcQuW62agk67GAg7Sul5IAZdJs"
-    CHAT_ID = "-1004400889862"
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-
-    try:
-        requests.post(url, data=payload, timeout=3)
-    except Exception as e:
-        print(f"Telegram Log Exception: {e}")
 
 
 def _period(start, end):
@@ -44,10 +29,23 @@ def _period(start, end):
     discount = invoices.aggregate(d=Sum("discount"))["d"] or 0
     revenue = (agg["rev"] or 0) - discount
     profit = revenue - (agg["cost"] or 0)
+    pieces = agg["pcs"] or 0
+
+    # الأونلاين: التحصيل بيدخل المبيعات والربح، والمرتجع بيخصم تكلفة الشحن
+    online = (OnlineOrder.objects
+              .filter(status__in=[OnlineOrder.COLLECTED, OnlineOrder.RETURNED],
+                      updated_at__date__range=(start, end))
+              .prefetch_related("items"))
+    for o in online:
+        profit += o.profit
+        if o.status == OnlineOrder.COLLECTED:
+            revenue += o.items_total - o.discount
+            pieces += o.pieces
+
     return {
         "revenue": revenue,
         "profit": profit,
-        "pieces": agg["pcs"] or 0,
+        "pieces": pieces,
         "invoices": invoices.count(),
     }
 
@@ -91,9 +89,60 @@ def dashboard(request):
 
     recent_sales = SaleInvoice.objects.select_related("customer").order_by("-id")[:8]
 
+    # فواتير التوريد اللي لسه ما اتأكدش استلام كميتها
+    pending_qs = PurchaseInvoice.objects.filter(is_confirmed=False)
+    pending_count = pending_qs.count()
+    pending_purchases = []
+    for inv in (pending_qs.select_related("supplier")
+                .prefetch_related("items__variant__model")
+                .order_by("-date", "-id")[:10]):
+        items = list(inv.items.all())
+        pending_purchases.append({
+            "invoice": inv,
+            "items": items,
+            "qty": sum(i.quantity for i in items),
+            "total": sum((i.quantity * i.unit_cost for i in items), 0),
+        })
+
+    # المخزون بالنوع والمقاسات
+    inventory_overview = []
+    for m in (ClothingModel.objects.filter(is_active=True)
+              .prefetch_related("variants").order_by("name")):
+        sizes = {}
+        for v in sorted(m.variants.all(), key=_size_key):
+            sizes[v.size] = sizes.get(v.size, 0) + v.quantity
+        inventory_overview.append({
+            "model": m,
+            "total": sum(sizes.values()),
+            "sizes": [{"size": k, "qty": q, "low": q <= LOW_STOCK}
+                      for k, q in sizes.items()],
+        })
+
+    # مديونيات العملاء
+    debtors = [c for c in Customer.objects.with_balance() if c.balance > 0]
+    debtors.sort(key=lambda c: -c.balance)
+    receivable = sum((c.balance for c in debtors), 0)
+
+    # الأوردرات الأونلاين حسب الحالة
+    online_counts = dict(OnlineOrder.objects.values_list("status")
+                         .annotate(c=Count("id")))
+    online_cards = [
+        {"key": key, "label": label, "count": online_counts.get(key, 0)}
+        for key, label in OnlineOrder.STATUS_CHOICES]
+
+    custody_balance = None
+    if request.user.has_perm("trade.view_custodysettlement"):
+        custody_balance = custody_summary()["balance"]
+
     context = {
         **admin.site.each_context(request),
         "title": "لوحة التحكم",
+        "custody_balance": custody_balance,
+        "inventory_overview": inventory_overview,
+        "receivable": receivable,
+        "debtors": debtors[:5],
+        "debtors_count": len(debtors),
+        "online_cards": online_cards,
         "today": today_stats,
         "month": month_stats,
         "month_expenses": month_expenses,
@@ -104,6 +153,8 @@ def dashboard(request):
         "low_stock_limit": LOW_STOCK,
         "top_models": top_models,
         "recent_sales": recent_sales,
+        "pending_purchases": pending_purchases,
+        "pending_count": pending_count,
         "chart": {"labels": labels, "revenue": revenue, "profit": profit},
     }
     return render(request, "trade/dashboard.html", context)

@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% load humanize %}
+
+{% block content_title %}تصفية عهدة #{{ st.pk }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'custody' %}" class="btn btn-outline-secondary">&rarr; العهدة</a>
+  <a href="{% url 'custody_receipt' st.pk %}" target="_blank" class="btn btn-dark">طباعة سند التسليم</a>
+</div>
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card"><div class="card-body">
+      <div style="font-size:34px;font-weight:700;color:#d70812">{{ st.amount|floatformat:2|intcomma }}</div>
+      <p class="mb-1"><b>المستلم:</b> {{ st.received_by }}</p>
+      <p class="mb-1"><b>الطريقة:</b> {{ st.get_method_display }}</p>
+      <p class="mb-1"><b>الوقت:</b> {{ st.settled_at|date:"d/m/Y H:i" }}</p>
+      {% if st.notes %}<p class="mb-1"><b>ملاحظات:</b> {{ st.notes }}</p>{% endif %}
+      <p class="mb-0 text-muted">سجّلها: {{ st.created_by|default:"—" }} · {{ st.created_at|date:"d/m/Y H:i" }}</p>
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card"><div class="card-header"><h3 class="card-title">صورة الإثبات</h3></div>
+    <div class="card-body text-center">
+      {% if st.has_proof %}
+        <a href="{% url 'custody_screenshot' st.pk %}" target="_blank"><img src="{% url 'custody_screenshot' st.pk %}" alt="إثبات" style="max-width:100%;max-height:640px;border:1px solid #ddd;border-radius:8px"></a>
+      {% else %}<div class="text-muted p-4">مفيش صورة إثبات لهذه التصفية.</div>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

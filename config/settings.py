@@ -138,6 +138,10 @@ JAZZMIN_SETTINGS = {
     "site_brand": "Ultras White Knights",
     "welcome_sign": "أهلاً بك في نظام إدارة المحل",
     "copyright": "Ultras White Knights",
+    "site_logo": "trade/img/logo.png",
+    "login_logo": "trade/img/logo.png",
+    "site_icon": "trade/img/logo.png",
+    "site_logo_classes": "img-circle",
 
     "language_chooser": False,
     "navigation_expanded": True,
@@ -168,13 +172,23 @@ JAZZMIN_SETTINGS = {
         "auth.group": "fas fa-users-cog",
     },
 
-    "topmenu_links": [
+       "topmenu_links": [
         {"name": "لوحة التحكم", "url": "dashboard", "icon": "fas fa-chart-line"},
-    ],
-
-   "custom_links": {
-    "trade": [
         {"name": "بيع سريع", "url": "pos", "icon": "fas fa-cash-register"},
-    ]
-},
+        {"name": "المخزون", "url": "inventory", "icon": "fas fa-warehouse"},
+        {"name": "العملاء والآجل", "url": "customers", "icon": "fas fa-hand-holding-usd"},
+        {"name": "الأونلاين", "url": "online_list", "icon": "fas fa-shipping-fast"},
+        {"name": "العهدة", "url": "custody", "icon": "fas fa-wallet", "permissions": ["trade.view_custodysettlement"]},
+],
+    "custom_links": {
+        "trade": [
+            {"name": "بيع سريع", "url": "pos", "icon": "fas fa-cash-register"},
+            {"name": "المخزون", "url": "inventory", "icon": "fas fa-warehouse"},
+            {"name": "العملاء والآجل", "url": "customers", "icon": "fas fa-hand-holding-usd"},
+            {"name": "الأونلاين", "url": "online_list", "icon": "fas fa-shipping-fast"},
+            {"name": "العهدة", "url": "custody", "icon": "fas fa-wallet", "permissions": ["trade.view_custodysettlement"]},
+        ]
+    },
+
 }
+FORMAT_MODULE_PATH = ['config.formats']

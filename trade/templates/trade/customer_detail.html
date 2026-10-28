@@ -1,0 +1,112 @@
+{% extends "admin/base.html" %}
+{% load humanize %}
+
+{% block content_title %}{{ customer.name }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  .kpi { border-radius: 12px; color: #fff; padding: 16px 18px; margin-bottom: 16px;
+         box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .kpi .label { font-size: 14px; opacity: .9; }
+  .kpi .value { font-size: 26px; font-weight: 700; line-height: 1.3; }
+  .bg-k1 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k2 { background:#0f0f10; color:#fff; border-color:#0f0f10; }
+  .bg-k3 { background:#d70812; color:#fff; border-color:#d70812; }
+  .bg-k3.clear { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  @media (max-width: 767px) { .kpi .value { font-size: 22px; } }
+</style>
+
+<div class="mb-3">
+  <a href="{% url 'customers' %}" class="btn btn-outline-secondary">&rarr; كل العملاء</a>
+  {% if customer.phone %}<a href="tel:{{ customer.phone }}" class="btn btn-outline-primary">اتصال {{ customer.phone }}</a>{% endif %}
+</div>
+
+<div class="row">
+  <div class="col-md-4 col-6"><div class="kpi bg-k1"><div class="label">إجمالي الآجل</div>
+    <div class="value">{{ customer.credit_total|floatformat:2|intcomma }}</div></div></div>
+  <div class="col-md-4 col-6"><div class="kpi bg-k2"><div class="label">إجمالي المدفوع</div>
+    <div class="value">{{ customer.paid_total|floatformat:2|intcomma }}</div></div></div>
+  <div class="col-md-4 col-12"><div class="kpi bg-k3{% if customer.balance <= 0 %} clear{% endif %}">
+    <div class="label">المتبقي على العميل</div>
+    <div class="value">{{ customer.balance|floatformat:2|intcomma }}</div></div></div>
+</div>
+
+{% if customer.balance > 0 %}
+<div class="card card-success card-outline mb-4">
+  <div class="card-header"><h3 class="card-title">تسجيل دفعة تسديد</h3></div>
+  <div class="card-body">
+    <form method="post" action="{% url 'customer_pay' customer.pk %}">
+      {% csrf_token %}
+      <div class="row">
+        <div class="col-md-3 mb-2"><label class="mb-1">المبلغ</label>
+          <input name="amount" type="number" step="0.01" min="0.01" max="{{ customer.balance|stringformat:'.2f' }}"
+                 class="form-control" style="height:44px" required></div>
+        <div class="col-md-3 mb-2"><label class="mb-1">طريقة الدفع</label>
+          <select name="method" class="form-control" style="height:44px">
+            {% for k, v in methods %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+          </select></div>
+        <div class="col-md-3 mb-2"><label class="mb-1">التاريخ</label>
+          <input name="date" type="date" value="{{ today }}" class="form-control" style="height:44px"></div>
+        <div class="col-md-3 mb-2"><label class="mb-1">على فاتورة (اختياري)</label>
+          <select name="invoice" class="form-control" style="height:44px">
+            <option value="">— على الحساب عموماً —</option>
+            {% for r in open_invoices %}
+            <option value="{{ r.invoice.pk }}">#{{ r.invoice.pk }} — متبقي {{ r.remaining|floatformat:2 }}</option>
+            {% endfor %}
+          </select></div>
+      </div>
+      <div class="row">
+        <div class="col-md-9 mb-2"><input name="notes" class="form-control" placeholder="ملاحظات (اختياري)"></div>
+        <div class="col-md-3 mb-2"><button class="btn btn-success btn-block" style="height:44px">تسجيل الدفعة</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">فواتير الآجل</h3></div>
+      <div class="card-body p-0"><div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>#</th><th>التاريخ</th><th>الإجمالي</th><th>مدفوع على الفاتورة</th><th>المتبقي</th><th></th></tr></thead>
+          {% for r in invoice_rows %}
+          <tr>
+            <td>{{ r.invoice.pk }}</td>
+            <td>{{ r.invoice.date|date:"d/m/Y" }}</td>
+            <td>{{ r.total|floatformat:2|intcomma }}</td>
+            <td>{{ r.paid|floatformat:2|intcomma }}</td>
+            <td>{{ r.remaining|floatformat:2|intcomma }}</td>
+            <td><a href="{% url 'sale_print' r.invoice.pk %}">عرض</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-muted p-3">لا توجد فواتير آجل.</td></tr>
+          {% endfor %}
+        </table>
+      </div></div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">الدفعات</h3></div>
+      <div class="card-body p-0"><div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead>
+          {% for p in payments %}
+          <tr>
+            <td>{{ p.date|date:"d/m/Y" }}</td>
+            <td><b>{{ p.amount|floatformat:2|intcomma }}</b></td>
+            <td>{{ p.get_method_display }}</td>
+            <td>{% if p.invoice_id %}فاتورة #{{ p.invoice_id }} {% endif %}{{ p.notes }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-muted p-3">لا توجد دفعات بعد.</td></tr>
+          {% endfor %}
+        </table>
+      </div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

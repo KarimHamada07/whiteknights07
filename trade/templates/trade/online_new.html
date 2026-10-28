@@ -1,0 +1,191 @@
+{% extends "admin/base.html" %}
+
+{% block content_title %}أوردر أونلاين جديد{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  #products { max-height: 55vh; overflow-y: auto; }
+  #products .list-group-item { cursor: pointer; }
+  #cart input.form-control { padding: 2px 6px; height: 34px; }
+  .total-box { font-size: 28px; font-weight: 700; color: #0f0f10; }
+  @media (max-width: 991px) {
+    #products { max-height: 40vh; }
+    #products .list-group-item { padding: 14px 12px; font-size: 16px; }
+    .form-control { font-size: 16px; height: 44px; }
+    #cart input.form-control { height: 40px; }
+  }
+</style>
+
+<div class="mb-3"><a href="{% url 'online_list' %}" class="btn btn-outline-secondary">&rarr; كل الأوردرات</a></div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <input id="search" type="search" class="form-control" placeholder="ابحث باسم الموديل أو الكود أو المقاس أو اللون...">
+      </div>
+      <div class="card-body p-0"><div id="products" class="list-group list-group-flush"></div></div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card" id="cart-card">
+      <div class="card-header"><h3 class="card-title">بيانات الأوردر</h3></div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6 mb-2"><input id="name" class="form-control" placeholder="اسم العميل *"></div>
+          <div class="col-md-6 mb-2"><input id="phone" class="form-control" placeholder="رقم الموبايل *" inputmode="tel"></div>
+        </div>
+        <input id="address" class="form-control mb-2" placeholder="العنوان">
+        <input id="notes" class="form-control mb-3" placeholder="ملاحظات">
+
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" id="cart">
+            <thead><tr><th>الصنف</th><th style="min-width:75px">الكمية</th><th style="min-width:95px">السعر</th><th>الإجمالي</th><th></th></tr></thead>
+            <tbody id="cart-body"></tbody>
+          </table>
+        </div>
+        <div id="empty" class="text-muted py-2">اضغط على صنف لإضافته للأوردر</div>
+
+        <div class="row mt-3">
+          <div class="col-md-4 mb-2"><label class="mb-1">خصم</label>
+            <input id="discount" type="number" min="0" step="0.01" value="0" class="form-control"></div>
+          <div class="col-md-4 mb-2"><label class="mb-1">شحن على العميل</label>
+            <input id="ship_fee" type="number" min="0" step="0.01" value="0" class="form-control"></div>
+          <div class="col-md-4 mb-2"><label class="mb-1">تكلفة الشحن علينا</label>
+            <input id="ship_cost" type="number" min="0" step="0.01" value="0" class="form-control"></div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:10px">
+          <div>المطلوب تحصيله: <span id="total" class="total-box">0.00</span></div>
+          <button id="save" type="button" class="btn btn-success btn-lg" disabled>حفظ الأوردر (تم التجهيز)</button>
+        </div>
+        <div id="msg" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ variants|json_script:"variants" }}
+<script>
+(function () {
+  var V = JSON.parse(document.getElementById("variants").textContent);
+  var cart = {};
+  var csrf = "{{ csrf_token }}";
+  var createUrl = "{% url 'online_create' %}";
+
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) {
+    return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
+  function label(v) { return v.name + " — " + v.size + (v.color ? " — " + v.color : ""); }
+  function money(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+  function num(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+  var elProducts = document.getElementById("products");
+  var elBody = document.getElementById("cart-body");
+  var elEmpty = document.getElementById("empty");
+  var elSave = document.getElementById("save");
+  var elMsg = document.getElementById("msg");
+
+  function renderProducts() {
+    var f = document.getElementById("search").value.trim().toLowerCase();
+    var html = "";
+    V.forEach(function (v) {
+      if (f && (label(v) + " " + v.code).toLowerCase().indexOf(f) === -1) return;
+      html += '<a class="list-group-item list-group-item-action d-flex justify-content-between" data-id="' + v.id + '">' +
+        "<span>" + esc(label(v)) + "</span>" +
+        '<span><span class="badge badge-info">' + v.qty + ' متاح</span> <b>' + money(v.price) + "</b></span></a>";
+    });
+    elProducts.innerHTML = html || '<div class="p-3 text-muted">لا توجد نتائج</div>';
+  }
+
+  function renderCart() {
+    var ids = Object.keys(cart), html = "";
+    ids.forEach(function (id) {
+      var c = cart[id];
+      html += '<tr data-id="' + id + '"><td>' + esc(c.label) + "</td>" +
+        '<td><input type="number" min="1" max="' + c.max + '" value="' + c.qty + '" class="form-control" data-f="qty"></td>' +
+        '<td><input type="number" min="0" step="0.01" value="' + c.price + '" class="form-control" data-f="price"></td>' +
+        '<td id="line-' + id + '">' + money(c.qty * c.price) + "</td>" +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger" data-del="' + id + '">×</button></td></tr>';
+    });
+    elBody.innerHTML = html;
+    elEmpty.style.display = ids.length ? "none" : "block";
+    updateTotals();
+  }
+
+  function updateTotals() {
+    var sum = 0;
+    Object.keys(cart).forEach(function (id) {
+      var c = cart[id]; sum += c.qty * c.price;
+      var cell = document.getElementById("line-" + id);
+      if (cell) cell.textContent = money(c.qty * c.price);
+    });
+    document.getElementById("total").textContent = money(sum - num("discount") + num("ship_fee"));
+    elSave.disabled = Object.keys(cart).length === 0;
+  }
+
+  function add(id) {
+    var v = V.find(function (x) { return x.id === id; });
+    if (!v) return;
+    var c = cart[id];
+    if (c) {
+      if (c.qty >= c.max) { alert("وصلت لأقصى كمية متاحة في المخزن"); return; }
+      c.qty += 1;
+    } else {
+      cart[id] = {id: id, label: label(v), qty: 1, price: v.price, max: v.qty};
+    }
+    renderCart();
+  }
+
+  elProducts.addEventListener("click", function (e) {
+    var row = e.target.closest("[data-id]");
+    if (row) add(parseInt(row.getAttribute("data-id"), 10));
+  });
+  elBody.addEventListener("input", function (e) {
+    var tr = e.target.closest("tr"); if (!tr) return;
+    var c = cart[tr.getAttribute("data-id")], f = e.target.getAttribute("data-f");
+    var val = parseFloat(e.target.value) || 0;
+    if (f === "qty") c.qty = Math.max(1, Math.min(Math.floor(val), c.max)); else c.price = Math.max(0, val);
+    updateTotals();
+  });
+  elBody.addEventListener("click", function (e) {
+    var id = e.target.getAttribute("data-del");
+    if (id) { delete cart[id]; renderCart(); }
+  });
+  ["discount", "ship_fee", "ship_cost"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", updateTotals);
+  });
+  document.getElementById("search").addEventListener("input", renderProducts);
+
+  function fail(text) { elMsg.textContent = text; elMsg.classList.remove("d-none"); }
+
+  elSave.addEventListener("click", function () {
+    elMsg.classList.add("d-none");
+    var name = document.getElementById("name").value.trim();
+    var phone = document.getElementById("phone").value.trim();
+    if (!name || !phone) { fail("اسم العميل ورقم الموبايل مطلوبين"); return; }
+    elSave.disabled = true;
+    fetch(createUrl, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRFToken": csrf},
+      body: JSON.stringify({
+        name: name, phone: phone,
+        address: document.getElementById("address").value,
+        notes: document.getElementById("notes").value,
+        discount: num("discount"), shipping_fee: num("ship_fee"), shipping_cost: num("ship_cost"),
+        items: Object.keys(cart).map(function (id) {
+          return {id: cart[id].id, qty: cart[id].qty, price: cart[id].price};
+        })
+      })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) { window.location.href = d.url; return; }
+      fail(d.error || "حدث خطأ"); elSave.disabled = false;
+    }).catch(function () { fail("تعذر الاتصال بالسيرفر"); elSave.disabled = false; });
+  });
+
+  renderProducts(); renderCart();
+})();
+</script>
+{% endblock %}

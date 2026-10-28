@@ -13,21 +13,73 @@
   .kpi .value { font-size: 28px; font-weight: 700; line-height: 1.3; }
   .kpi .sub { font-size: 12px; opacity: .85; }
   .kpi i { position: absolute; left: 14px; top: 14px; font-size: 38px; opacity: .25; }
-  .bg-k1 { background: linear-gradient(135deg,#1f3a5f,#2c5282); }
-  .bg-k2 { background: linear-gradient(135deg,#1b7f5c,#27ae80); }
-  .bg-k3 { background: linear-gradient(135deg,#b7791f,#e0a526); }
-  .bg-k4 { background: linear-gradient(135deg,#6b46c1,#805ad5); }
-  .bg-k5 { background: linear-gradient(135deg,#c53030,#e25555); }
-  .bg-k6 { background: linear-gradient(135deg,#2b6cb0,#4299e1); }
-  .bg-k7 { background: linear-gradient(135deg,#2d3748,#4a5568); }
-  .bg-k8 { background: linear-gradient(135deg,#975a16,#d69e2e); }
+  .bg-k1 { background:#0f0f10; color:#fff; border-color:#0f0f10; }
+  .bg-k2 { background:#d70812; color:#fff; border-color:#d70812; }
+  .bg-k3 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k4 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; } .bg-k4 .value { color:#d70812; }
+  .bg-k5 { background:#d70812; color:#fff; border-color:#d70812; }
+  .bg-k6 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k7 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k8 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
   .card-body.p-0 { overflow-x: auto; }
+  .chip { display: inline-block; padding: 4px 10px; margin: 3px; border-radius: 16px;
+          background: #f1f1f2; color: #0f0f10; font-size: 14px; font-weight: 600; }
+  .chip.low { background: #fdecea; color: #d70812; }
+  .chip small { font-weight: 400; opacity: .8; }
+  a.stat { display: block; text-align: center; background: #fff; border: 1px solid #e3e6ea;
+           border-radius: 12px; padding: 14px 8px; margin-bottom: 16px; color: #333; text-decoration: none; }
+  a.stat:hover { box-shadow: 0 3px 10px rgba(0,0,0,.12); color: #333; }
+  a.stat .n { font-size: 28px; font-weight: 700; line-height: 1.2; }
+  a.stat .t { font-size: 13px; color: #6c757d; }
+  a.stat.prepared .n { color: #6b6b70; }
+  a.stat.shipped .n { color: #0f0f10; }
+  a.stat.collected .n { color: #0f0f10; }
+  a.stat.returned .n { color: #d70812; }
+  a.stat.debt .n { color: #d70812; }
   @media (max-width: 767px) {
     .kpi { padding: 14px 16px; margin-bottom: 12px; }
     .kpi .value { font-size: 24px; }
     .kpi i { font-size: 30px; }
   }
 </style>
+
+{% if pending_purchases %}
+<div class="card card-warning card-outline mb-4">
+  <div class="card-header">
+    <h3 class="card-title"><i class="fas fa-bell text-warning"></i>
+      تنبيه: {{ pending_count }} فاتورة توريد بانتظار تأكيد الكمية</h3>
+  </div>
+  <div class="card-body">
+    {% for p in pending_purchases %}
+    <div class="border rounded p-3 mb-3">
+      <div class="d-flex justify-content-between flex-wrap">
+        <div><b>توريد #{{ p.invoice.pk }}</b> — {{ p.invoice.supplier }} — {{ p.invoice.date|date:"d/m/Y" }}</div>
+        <div>إجمالي الكمية: <b>{{ p.qty }}</b> قطعة · القيمة: {{ p.total|floatformat:2|intcomma }}</div>
+      </div>
+      <ul class="mt-2 mb-2">
+        {% for i in p.items %}
+        <li>{{ i.variant }} × <b>{{ i.quantity }}</b></li>
+        {% empty %}
+        <li class="text-danger">الفاتورة بدون أصناف</li>
+        {% endfor %}
+      </ul>
+      <a href="{% url 'admin:trade_purchaseinvoice_change' p.invoice.pk %}" class="btn btn-sm btn-outline-secondary">مراجعة / تعديل</a>
+      {% if p.items %}
+      <form method="post" action="{% url 'purchase_confirm' p.invoice.pk %}" class="d-inline"
+            data-msg="تأكيد إن الكمية المستلمة ({{ p.qty }} قطعة) مطابقة للفاتورة؟ سيتم تحديث المخزون."
+            onsubmit="return confirm(this.dataset.msg)">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-success">تأكيد استلام الكمية</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if pending_count > pending_purchases|length %}
+    <a href="{% url 'admin:trade_purchaseinvoice_changelist' %}">عرض كل فواتير التوريد ({{ pending_count }})</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <div class="row">
   <div class="col-lg-3 col-md-6">
@@ -84,6 +136,27 @@
 </div>
 
 <div class="row">
+  <div class="col-lg col-6">
+    <a class="stat debt" href="{% url 'customers' %}?debt=1">
+      <div class="n">{{ receivable|floatformat:2|intcomma }}</div>
+      <div class="t">مديونيات العملاء ({{ debtors_count }} عميل)</div></a>
+  </div>
+  {% if custody_balance is not None %}
+  <div class="col-lg col-6">
+    <a class="stat" href="{% url 'custody' %}">
+      <div class="n">{{ custody_balance|floatformat:2|intcomma }}</div>
+      <div class="t">العهدة الحالية (للتصفية)</div></a>
+  </div>
+  {% endif %}
+  {% for c in online_cards %}
+  <div class="col-lg col-6">
+    <a class="stat {{ c.key }}" href="{% url 'online_list' %}?status={{ c.key }}">
+      <div class="n">{{ c.count }}</div><div class="t">أونلاين: {{ c.label }}</div></a>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row">
   <div class="col-lg-8">
     <div class="card">
       <div class="card-header"><h3 class="card-title">المبيعات والأرباح — آخر 7 أيام</h3></div>
@@ -102,6 +175,31 @@
           {% endfor %}
         </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between">
+    <h3 class="card-title">المخزون بالنوع والمقاسات</h3>
+    <a href="{% url 'inventory' %}">التفاصيل الكاملة</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        {% for m in inventory_overview %}
+        <tr>
+          <td style="min-width:130px"><a href="{% url 'inventory_detail' m.model.pk %}"><b>{{ m.model.name }}</b></a>
+            <div class="text-muted" style="font-size:12px">{{ m.model.code }}</div></td>
+          <td style="min-width:90px"><b style="font-size:20px">{{ m.total }}</b> <small class="text-muted">قطعة</small></td>
+          <td>
+            {% for s in m.sizes %}<span class="chip{% if s.low %} low{% endif %}">{{ s.size }}: {{ s.qty }}</span>{% empty %}<span class="text-muted">لا توجد مقاسات</span>{% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td class="text-muted p-3">لا توجد موديلات بعد.</td></tr>
+        {% endfor %}
+      </table>
     </div>
   </div>
 </div>
@@ -157,8 +255,8 @@
       data: {
         labels: d.labels,
         datasets: [
-          { label: "المبيعات", data: d.revenue, backgroundColor: "#2c5282", borderRadius: 6 },
-          { label: "الربح", data: d.profit, backgroundColor: "#27ae80", borderRadius: 6 }
+          { label: "المبيعات", data: d.revenue, backgroundColor: "#d70812", borderRadius: 6 },
+          { label: "الربح", data: d.profit, backgroundColor: "#0f0f10", borderRadius: 6 }
         ]
       },
       options: { responsive: true, plugins: { legend: { position: "bottom" } },

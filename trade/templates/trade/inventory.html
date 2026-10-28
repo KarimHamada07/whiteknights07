@@ -1,0 +1,78 @@
+{% extends "admin/base.html" %}
+{% load humanize %}
+
+{% block content_title %}المخزون{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  .kpi { border-radius: 12px; color: #fff; padding: 16px 18px; margin-bottom: 16px;
+         box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .kpi .label { font-size: 14px; opacity: .9; }
+  .kpi .value { font-size: 26px; font-weight: 700; line-height: 1.3; }
+  .bg-k1 { background:#0f0f10; color:#fff; border-color:#0f0f10; }
+  .bg-k2 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k3 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k4 { background:#d70812; color:#fff; border-color:#d70812; }
+
+  a.inv-card { display: block; background: #fff; border: 1px solid #e3e6ea; border-radius: 12px;
+               padding: 16px; margin-bottom: 16px; color: inherit; text-decoration: none;
+               transition: box-shadow .15s, transform .15s; }
+  a.inv-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.15); transform: translateY(-2px); color: inherit; }
+  .inv-card .name { font-size: 18px; font-weight: 700; }
+  .inv-card .code { font-size: 12px; color: #6c757d; }
+  .inv-card .qty { font-size: 34px; font-weight: 700; color: #0f0f10; line-height: 1.1; margin: 10px 0 2px; }
+  .inv-card .meta { font-size: 13px; color: #6c757d; }
+  .inv-card.inactive { opacity: .55; }
+  @media (max-width: 767px) { .kpi .value { font-size: 22px; } .inv-card .qty { font-size: 30px; } }
+</style>
+
+<div class="row">
+  <div class="col-lg-3 col-6">
+    <div class="kpi bg-k1"><div class="label">إجمالي القطع</div>
+      <div class="value">{{ grand_qty|intcomma }}</div></div>
+  </div>
+  <div class="col-lg-3 col-6">
+    <div class="kpi bg-k2"><div class="label">عدد الموديلات</div>
+      <div class="value">{{ models_count }}</div></div>
+  </div>
+  <div class="col-lg-3 col-6">
+    <div class="kpi bg-k3"><div class="label">قيمة المخزون (بالتكلفة)</div>
+      <div class="value">{{ grand_value|floatformat:2|intcomma }}</div></div>
+  </div>
+  <div class="col-lg-3 col-6">
+    <div class="kpi bg-k4"><div class="label">مقاسات قاربت على النفاد</div>
+      <div class="value">{{ low_total }}</div></div>
+  </div>
+</div>
+
+<input id="inv-search" type="search" class="form-control mb-3" style="height:44px"
+       placeholder="ابحث باسم الموديل أو الكود...">
+
+<div class="row" id="inv-grid">
+  {% for m in items %}
+  <div class="col-xl-3 col-lg-4 col-md-6 inv-item"
+       data-name="{{ m.name|lower }} {{ m.code|lower }}">
+    <a href="{% url 'inventory_detail' m.pk %}" class="inv-card{% if not m.is_active %} inactive{% endif %}">
+      <div class="name">{{ m.name }}</div>
+      <div class="code">{{ m.code }}{% if not m.is_active %} · غير نشط{% endif %}</div>
+      <div class="qty">{{ m.total_qty|intcomma }} <small style="font-size:15px">قطعة</small></div>
+      <div class="meta">{{ m.variants_count }} مقاس/لون
+        {% if m.low_variants %}· <span class="text-danger">{{ m.low_variants }} منخفض أو نافد</span>{% endif %}</div>
+      <div class="meta">القيمة: {{ m.stock_value|floatformat:2|intcomma }}</div>
+    </a>
+  </div>
+  {% empty %}
+  <div class="col-12 text-muted p-4">لا توجد موديلات بعد. أضف موديل من قسم الموديلات.</div>
+  {% endfor %}
+</div>
+
+<script>
+  document.getElementById("inv-search").addEventListener("input", function () {
+    var q = this.value.trim().toLowerCase();
+    document.querySelectorAll(".inv-item").forEach(function (el) {
+      el.style.display = el.getAttribute("data-name").indexOf(q) === -1 ? "none" : "";
+    });
+  });
+</script>
+{% endblock %}

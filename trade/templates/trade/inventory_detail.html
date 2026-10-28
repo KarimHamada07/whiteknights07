@@ -1,0 +1,85 @@
+{% extends "admin/base.html" %}
+{% load humanize %}
+
+{% block content_title %}{{ model.name }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  .kpi { border-radius: 12px; color: #fff; padding: 16px 18px; margin-bottom: 16px;
+         box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .kpi .label { font-size: 14px; opacity: .9; }
+  .kpi .value { font-size: 26px; font-weight: 700; line-height: 1.3; }
+  .bg-k1 { background:#0f0f10; color:#fff; border-color:#0f0f10; }
+  .bg-k2 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .bg-k3 { background:#fff; color:#111; border:1px solid #e2e2e4; box-shadow:none; }
+  .qbar { background: #e9ecef; border-radius: 6px; height: 10px; min-width: 80px; overflow: hidden; }
+  .qbar > span { display: block; height: 100%; background: #0f0f10; }
+  .qbar.low > span { background: #d70812; }
+  .qbar.out > span { background: #5a0006; }
+  tfoot td { font-weight: 700; background: #f4f6f9; }
+  @media (max-width: 767px) { .kpi .value { font-size: 22px; } }
+</style>
+
+<div class="mb-3">
+  <a href="{% url 'inventory' %}" class="btn btn-outline-secondary">&rarr; كل الموديلات</a>
+  <a href="{% url 'admin:trade_clothingmodel_change' model.pk %}" class="btn btn-outline-primary">تعديل الموديل</a>
+</div>
+
+<div class="row">
+  <div class="col-md-4 col-6">
+    <div class="kpi bg-k1"><div class="label">إجمالي الكمية</div>
+      <div class="value">{{ total_qty|intcomma }} قطعة</div></div>
+  </div>
+  <div class="col-md-4 col-6">
+    <div class="kpi bg-k2"><div class="label">عدد المقاسات/الألوان</div>
+      <div class="value">{{ rows|length }}</div></div>
+  </div>
+  <div class="col-md-4 col-12">
+    <div class="kpi bg-k3"><div class="label">قيمة المخزون (بالتكلفة)</div>
+      <div class="value">{{ total_value|floatformat:2|intcomma }}</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title">المقاسات والألوان — {{ model.name }} ({{ model.code }})</h3></div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr><th>المقاس</th><th>اللون</th><th style="min-width:130px">الكمية</th>
+              <th>الحالة</th><th>متوسط التكلفة</th><th>سعر البيع</th><th>القيمة</th></tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><b>{{ r.variant.size }}</b></td>
+            <td>{{ r.variant.color|default:"—" }}</td>
+            <td>
+              <b>{{ r.variant.quantity }}</b>
+              <div class="qbar {{ r.status }}"><span style="width: {{ r.percent }}%"></span></div>
+            </td>
+            <td>
+              {% if r.status == "out" %}<span class="badge badge-danger">نفد</span>
+              {% elif r.status == "low" %}<span class="badge badge-warning">منخفض</span>
+              {% else %}<span class="badge badge-success">متوفر</span>{% endif %}
+            </td>
+            <td>{{ r.variant.avg_cost|floatformat:2 }}</td>
+            <td>{{ r.variant.sale_price|floatformat:2 }}</td>
+            <td>{{ r.value|floatformat:2|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-muted p-3">لا توجد مقاسات لهذا الموديل بعد. أضفها من صفحة تعديل الموديل.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+        <tfoot>
+          <tr><td colspan="2">الإجمالي</td><td>{{ total_qty|intcomma }}</td>
+              <td colspan="3"></td><td>{{ total_value|floatformat:2|intcomma }}</td></tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

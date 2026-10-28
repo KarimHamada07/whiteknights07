@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+
+{% block content_title %}سجل النشاط{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  .ev td { vertical-align: top; }
+  .ev .txt { white-space: pre-line; }
+  .sent { color: #0f0f10; font-weight: 600; }
+  .wait { color: #d70812; font-weight: 600; }
+</style>
+
+<div class="alert alert-light border">
+  <b>تليجرام:</b> {{ mode }}
+  {% if pending %} · <span class="wait">{{ pending }} حدث بانتظار الإرسال</span>{% else %} · <span class="sent">كله اتبعت</span>{% endif %}
+</div>
+
+<form method="get" class="mb-3 d-flex flex-wrap" style="gap:10px">
+  <input type="search" name="q" value="{{ q }}" class="form-control" style="max-width:360px;height:44px"
+         placeholder="ابحث في الأحداث أو باسم مستخدم...">
+  <button class="btn btn-primary">بحث</button>
+  {% if q %}<a class="btn btn-outline-secondary" href="{% url 'activity' %}">مسح</a>{% endif %}
+</form>
+
+<div class="card"><div class="card-body p-0"><div class="table-responsive">
+  <table class="table table-sm mb-0 ev">
+    <thead><tr><th>الوقت</th><th>المستخدم</th><th>الحدث</th><th>تليجرام</th></tr></thead>
+    {% for e in events %}
+    <tr>
+      <td style="white-space:nowrap">{{ e.created_at|date:"d/m H:i:s" }}</td>
+      <td>{{ e.user_name|default:"—" }}</td>
+      <td class="txt">{{ e.text }}</td>
+      <td>{% if e.sent %}<span class="sent">✓ أُرسل</span>{% else %}<span class="wait">⏳ بانتظار</span>{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="text-muted p-3">لا توجد أحداث بعد.</td></tr>
+    {% endfor %}
+  </table>
+</div></div></div>
+{% endblock %}

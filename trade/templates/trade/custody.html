@@ -1,0 +1,171 @@
+{% extends "admin/base.html" %}
+{% load humanize %}
+
+{% block content_title %}العهدة{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  .kpi { border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; border: 1px solid #e2e2e4; background: #fff; color: #111; }
+  .kpi .label { font-size: 14px; opacity: .85; }
+  .kpi .value { font-size: 26px; font-weight: 700; line-height: 1.3; }
+  .kpi.main { background: #0f0f10; color: #fff; border-color: #0f0f10; }
+  .kpi.main.neg { background: #d70812; border-color: #d70812; }
+  .kpi.main .value { font-size: 32px; }
+  details.box { margin-bottom: 14px; }
+  details.box > summary { cursor: pointer; list-style: none; display: inline-block; padding: 10px 20px;
+                          border-radius: 8px; font-weight: 700; }
+  details.box > summary::-webkit-details-marker { display: none; }
+  details.settle > summary { background: #d70812; color: #fff; }
+  details.deposit > summary { background: #fff; color: #111; border: 1px solid #0f0f10; }
+  .formcard { border: 1px solid #e2e2e4; border-radius: 12px; padding: 16px; margin-top: 10px; background: #fff; }
+  .formcard .form-control { height: 44px; font-size: 16px; }
+  #preview { max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 8px; display: none; }
+  .thumb { height: 42px; width: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; }
+  .noproof { background: #fff; color: #d70812; border: 1px solid #d70812; border-radius: 10px; padding: 1px 8px; font-size: 12px; }
+  @media (max-width: 767px) { .kpi .value { font-size: 22px; } .kpi.main .value { font-size: 28px; } }
+</style>
+
+<div class="row">
+  <div class="col-lg-3 col-12">
+    <div class="kpi main{% if s.balance < 0 %} neg{% endif %}"><div class="label">العهدة الحالية (المبالغ الموجودة)</div>
+      <div class="value">{{ s.balance|floatformat:2|intcomma }}</div></div>
+  </div>
+  <div class="col-lg-3 col-6"><div class="kpi"><div class="label">إجمالي المقبوضات</div>
+    <div class="value">{{ s.total_in|floatformat:2|intcomma }}</div></div></div>
+  <div class="col-lg-3 col-6"><div class="kpi"><div class="label">المصروفات</div>
+    <div class="value">{{ s.expenses|floatformat:2|intcomma }}</div></div></div>
+  <div class="col-lg-3 col-12"><div class="kpi"><div class="label">اللي اتصفّى</div>
+    <div class="value">{{ s.settled|floatformat:2|intcomma }}</div></div></div>
+</div>
+
+<div class="card mb-3"><div class="card-body p-2">
+  <small class="text-muted">مكوّنات المقبوضات:</small>
+  مبيعات نقدي <b>{{ s.cash_sales|floatformat:2|intcomma }}</b> ·
+  أونلاين محصّل <b>{{ s.online|floatformat:2|intcomma }}</b> ·
+  دفعات عملاء <b>{{ s.payments|floatformat:2|intcomma }}</b> ·
+  إضافات يدوية <b>{{ s.deposits|floatformat:2|intcomma }}</b>
+</div></div>
+
+{% if can_add %}
+<details class="box settle">
+  <summary>تصفية عهدة</summary>
+  <form method="post" action="{% url 'custody_settle' %}" enctype="multipart/form-data" class="formcard" id="settle-form">
+    {% csrf_token %}
+    <div class="row">
+      <div class="col-md-4 mb-2"><label class="mb-1">المبلغ</label>
+        <input name="amount" id="amount" type="number" step="0.01" min="0.01" class="form-control" required
+               value="{% if s.balance > 0 %}{{ s.balance|stringformat:'.2f' }}{% endif %}"></div>
+      <div class="col-md-4 mb-2"><label class="mb-1">المستلم (مين استلم المبلغ)</label>
+        <input name="received_by" id="receiver" list="receivers" class="form-control" required maxlength="120" autocomplete="off">
+        <datalist id="receivers">{% for r in receivers %}<option value="{{ r }}">{% endfor %}</datalist></div>
+      <div class="col-md-4 mb-2"><label class="mb-1">طريقة التسليم</label>
+        <select name="method" class="form-control">{% for k, v in methods %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="row">
+      <div class="col-md-4 mb-2"><label class="mb-1">الوقت</label>
+        <input name="settled_at" type="datetime-local" value="{{ now }}" class="form-control"></div>
+      <div class="col-md-8 mb-2"><label class="mb-1">ملاحظات</label>
+        <input name="notes" class="form-control" maxlength="300"></div>
+    </div>
+    <div class="mb-2"><label class="mb-1">صورة الإثبات (سكرين التحويل أو الإيصال) — اختياري</label>
+      <input name="screenshot" id="shot" type="file" accept="image/*" class="form-control" style="height:auto;padding:8px">
+      <img id="preview" alt="">
+      <small class="text-muted">الصورة بتتصغّر تلقائياً قبل الرفع، وبتتحفظ في مكان خاص ما بيتفتحش غير من جوه النظام.</small></div>
+    <button class="btn btn-lg" style="background:#d70812;color:#fff">تسجيل التصفية</button>
+  </form>
+</details>
+{% endif %}
+
+{% if can_deposit %}
+<details class="box deposit">
+  <summary>إضافة على العهدة</summary>
+  <form method="post" action="{% url 'custody_deposit' %}" class="formcard">
+    {% csrf_token %}
+    <p class="text-muted mb-2">لو في مبلغ موجود قبل ما تبدأ تستخدم النظام، أو فلوس اتحطت في العهدة من بره.</p>
+    <div class="row">
+      <div class="col-md-3 mb-2"><input name="amount" type="number" step="0.01" min="0.01" class="form-control" placeholder="المبلغ" required></div>
+      <div class="col-md-3 mb-2"><input name="date" type="date" value="{{ today }}" class="form-control"></div>
+      <div class="col-md-4 mb-2"><input name="note" class="form-control" placeholder="ملاحظة" maxlength="200"></div>
+      <div class="col-md-2 mb-2"><button class="btn btn-dark btn-block" style="height:44px">إضافة</button></div>
+    </div>
+  </form>
+</details>
+{% endif %}
+
+{% if by_receiver %}
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">إجمالي اللي استلمه كل شخص</h3></div>
+<div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0">
+  {% for r in by_receiver %}<tr><td><a href="?q={{ r.received_by|urlencode }}">{{ r.received_by }}</a></td>
+    <td>{{ r.n }} تصفية</td><td><b>{{ r.total|floatformat:2|intcomma }}</b></td></tr>{% endfor %}
+</table></div></div></div>
+{% endif %}
+
+<form method="get" class="mb-3 d-flex flex-wrap align-items-center" style="gap:10px">
+  <input type="search" name="q" value="{{ q }}" class="form-control" style="max-width:340px;height:44px" placeholder="ابحث باسم المستلم أو الملاحظات...">
+  <label class="mb-0"><input type="checkbox" name="noproof" value="1" {% if noproof %}checked{% endif %}> بدون إثبات فقط</label>
+  <button class="btn btn-primary">بحث</button>
+  {% if q or noproof %}<a class="btn btn-outline-secondary" href="{% url 'custody' %}">مسح</a>{% endif %}
+</form>
+
+<div class="card"><div class="card-body p-0"><div class="table-responsive">
+  <table class="table table-sm mb-0">
+    <thead><tr><th>#</th><th>الوقت</th><th>المستلم</th><th>المبلغ</th><th>الطريقة</th><th>الإثبات</th></tr></thead>
+    {% for t in page %}
+    <tr>
+      <td><a href="{% url 'custody_detail' t.pk %}">{{ t.pk }}</a></td>
+      <td style="white-space:nowrap">{{ t.settled_at|date:"d/m/Y H:i" }}</td>
+      <td><b>{{ t.received_by }}</b>{% if t.notes %}<div class="text-muted" style="font-size:12px">{{ t.notes }}</div>{% endif %}</td>
+      <td><b>{{ t.amount|floatformat:2|intcomma }}</b></td>
+      <td>{{ t.get_method_display }}</td>
+      <td>{% if t.has_proof %}<a href="{% url 'custody_detail' t.pk %}"><img class="thumb" loading="lazy" src="{% url 'custody_screenshot' t.pk %}" alt="إثبات"></a>
+          {% else %}<span class="noproof">بدون إثبات</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="text-muted p-3">لا توجد تصفيات{% if q or noproof %} مطابقة{% endif %}.</td></tr>{% endfor %}
+  </table>
+</div></div></div>
+
+{% if page.paginator.num_pages > 1 %}
+<div class="d-flex justify-content-center mt-3" style="gap:10px">
+  {% if page.has_previous %}<a class="btn btn-outline-secondary" href="?page={{ page.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if noproof %}&noproof=1{% endif %}">السابق</a>{% endif %}
+  <span class="align-self-center">صفحة {{ page.number }} من {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-outline-secondary" href="?page={{ page.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if noproof %}&noproof=1{% endif %}">التالي</a>{% endif %}
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var inp = document.getElementById("shot");
+  if (!inp) return;
+  var prev = document.getElementById("preview");
+  inp.addEventListener("change", function () {
+    var f = inp.files[0];
+    if (!f) { prev.style.display = "none"; return; }
+    prev.src = URL.createObjectURL(f); prev.style.display = "block";
+    // تصغير الصورة قبل الرفع (توفير مساحة ورفع أسرع)
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type) || f.size < 400 * 1024) return;
+    var img = new Image();
+    img.onload = function () {
+      var r = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * r); c.height = Math.round(img.naturalHeight * r);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(function (b) {
+        if (!b || b.size >= f.size) return;
+        try {
+          var dt = new DataTransfer();
+          dt.items.add(new File([b], "shot.jpg", {type: "image/jpeg"}));
+          inp.files = dt.files;
+        } catch (e) { /* نرفع الأصلية */ }
+      }, "image/jpeg", 0.82);
+    };
+    img.src = prev.src;
+  });
+  document.getElementById("settle-form").addEventListener("submit", function (e) {
+    var msg = "تأكيد تصفية " + document.getElementById("amount").value + " للمستلم: " +
+              document.getElementById("receiver").value + "؟";
+    if (!confirm(msg)) e.preventDefault();
+  });
+})();
+</script>
+{% endblock %}

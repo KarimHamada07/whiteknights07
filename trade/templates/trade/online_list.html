@@ -1,0 +1,83 @@
+{% extends "admin/base.html" %}
+{% load humanize %}
+
+{% block content_title %}الأونلاين{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<style>
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .tabs a { padding: 8px 14px; border-radius: 20px; border: 1px solid #ced4da; color: #333;
+            text-decoration: none; font-weight: 600; background: #fff; }
+  .tabs a .n { display: inline-block; min-width: 24px; text-align: center; padding: 0 6px;
+               border-radius: 12px; background: #e9ecef; margin-right: 4px; font-size: 13px; }
+  .tabs a.active { color: #fff; border-color: transparent; }
+  .tabs a.active.secondary { background: #3a3a3d; }
+  .tabs a.active.info { background: #6b6b70; }
+  .tabs a.active.primary { background: #0f0f10; }
+  .tabs a.active.success { background: #0f0f10; }
+  .tabs a.active.danger { background: #d70812; }
+  .tabs a.active .n { background: rgba(255,255,255,.3); color: #fff; }
+  .order { background: #fff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .order .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .order .items { font-size: 13px; color: #6c757d; margin: 6px 0; }
+  .order .total { font-size: 20px; font-weight: 700; color: #0f0f10; }
+</style>
+
+<div class="mb-3">
+  <a href="{% url 'online_new' %}" class="btn btn-success">+ أوردر جديد</a>
+</div>
+
+<form method="get" class="mb-3 d-flex flex-wrap" style="gap:10px">
+  <input type="search" name="q" value="{{ q }}" class="form-control" style="max-width:380px;height:44px"
+         placeholder="ابحث بالاسم أو رقم الموبايل أو رقم الأوردر...">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <button class="btn btn-primary">بحث</button>
+  {% if q %}<a class="btn btn-outline-secondary" href="?{% if status %}status={{ status }}{% endif %}">مسح البحث</a>{% endif %}
+</form>
+
+<div class="tabs">
+  {% for t in tabs %}
+  <a class="{{ t.style }}{% if t.active %} active{% endif %}"
+     href="?{% if t.key %}status={{ t.key }}{% endif %}{% if q %}{% if t.key %}&{% endif %}q={{ q|urlencode }}{% endif %}">
+    {{ t.label }} <span class="n">{{ t.count }}</span></a>
+  {% endfor %}
+</div>
+
+<div class="row">
+  {% for o in orders %}
+  <div class="col-lg-6">
+    <div class="order">
+      <div class="head">
+        <div>
+          <a href="{% url 'online_detail' o.order.pk %}"><b>#{{ o.order.pk }} — {{ o.order.customer_name }}</b></a>
+          <div><a href="tel:{{ o.order.phone }}">{{ o.order.phone }}</a>
+            · <small class="text-muted">{{ o.order.created_at|date:"d/m/Y H:i" }}</small></div>
+        </div>
+        <span class="badge badge-{{ o.style }}" style="font-size:13px">{{ o.order.get_status_display }}</span>
+      </div>
+      {% if o.order.address %}<div class="items">{{ o.order.address }}</div>{% endif %}
+      <div class="items">
+        {% for i in o.order.items.all %}{{ i.variant }} × {{ i.quantity }}{% if not forloop.last %} · {% endif %}{% endfor %}
+      </div>
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="total">{{ o.order.total_to_collect|floatformat:2|intcomma }}</div>
+        <a href="{% url 'online_detail' o.order.pk %}" class="btn btn-sm btn-outline-primary">التفاصيل / تغيير الحالة</a>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12 text-muted p-4">لا توجد أوردرات{% if q %} مطابقة للبحث{% endif %}.</div>
+  {% endfor %}
+</div>
+
+{% if page.paginator.num_pages > 1 %}
+<div class="d-flex justify-content-center" style="gap:10px">
+  {% if page.has_previous %}<a class="btn btn-outline-secondary"
+    href="?page={{ page.previous_page_number }}{% if status %}&status={{ status }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">السابق</a>{% endif %}
+  <span class="align-self-center">صفحة {{ page.number }} من {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-outline-secondary"
+    href="?page={{ page.next_page_number }}{% if status %}&status={{ status }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">التالي</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
